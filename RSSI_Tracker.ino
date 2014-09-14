@@ -1,11 +1,41 @@
-// Version 1.0.1 22.2.2014
+/* RSSI-Tracker
+*  Version 1.0.3 14.09.2014 
+*  Copyright (C) 2013-2014 RSSI-Tracker Jörg Frede
+*  based on code by Michael Heck Eigenbau Diversity und Antennentracker
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*
+*  Dieses Programm ist Freie Software: Sie können es unter den Bedingungen
+*  der GNU General Public License, wie von der Free Software Foundation,
+*  Version 3 der Lizenz oder (nach Ihrer Wahl) jeder neueren
+*  veröffentlichten Version, weiterverbreiten und/oder modifizieren.
+*
+*  Dieses Programm wird in der Hoffnung, dass es nützlich sein wird, aber
+*  OHNE JEDE GEWÄHRLEISTUNG, bereitgestellt; sogar ohne die implizite
+*  Gewährleistung der MARKTFÄHIGKEIT oder EIGNUNG FÜR EINEN BESTIMMTEN ZWECK.
+*  Siehe die GNU General Public License für weitere Details.
+*
+*  Sie sollten eine Kopie der GNU General Public License zusammen mit diesem
+*  Programm erhalten haben. Wenn nicht, siehe <http://www.gnu.org/licenses/>.
+*/
 
 #include <LCD4884.h>
 #include <Servo.h>
 
 //SETUP
 int wartezeit = 200;  // Default wartezeit in Millisekunden
-int schwellwert = 99;  // Über diesem wert wird die Antenne nicht bewegt
+int schwellwert = 95;  // Über diesem wert wird die Antenne nicht bewegt
 int maxh = 175;   // Winkel rechts
 int minh = 5;     // Winkel links
 int maxv = 120;   // Winkel oben
@@ -15,7 +45,7 @@ int rssi2 = 2;       // 2. RSSI Fixe Antenne
 int ServoPortH = 10;  // Port für Hozizontalen Servo
 int ServoPortV = 12;  // Port für Vertikalen Servo
 #define SPKR 9        // Port für Buzzer
-int owinkel = 45;     // Öffnungswinkel der Tracking Antenne
+int owinkel = 30;     // Öffnungswinkel der Tracking Antenne
 
 
 //Variablen Initialisieren
@@ -24,6 +54,7 @@ int calibrate2 = 0;
 int rssiTrack = 0;
 int rssiFix = 0;
 int rssiTrackOld = 0;
+int rssiFixOld = 0;
 int hw = minh;
 int vw = minv;
 char richtung = 'L';
@@ -71,7 +102,8 @@ void setup()
       delay(10000);
       noTone(SPKR);
     }
-  } while (((calibrate1 + calibrate2) / 2) < 150);        // Solange wir noch keine gültige Calibrierung haben noch mal widerholen
+  } 
+  while (((calibrate1 + calibrate2) / 2) < 150);        // Solange wir noch keine gültige Calibrierung haben noch mal widerholen
 
   tone(SPKR, 2093, 100);                                  // Ein wenig Musik um zu zeigen das wir erfolgreich Sender gefunden haben
   delay(130);
@@ -143,31 +175,34 @@ void trackHorizontal()
           richtung = 'R';
         }
       }
-      else if ( rssiTrack < rssiTrackOld)                 //RSSI schlechter geworden
+      else if ( rssiTrack < rssiTrackOld )                 //RSSI schlechter geworden
       {
         Serial.println("schlechter");
         Serial.println(rssiTrackOld - rssiTrackOld);
         Serial.println("faktor");
         Serial.println(faktor);
-        if (richtung == 'R')
+        if ( rssiFix >= rssiFixOld )                        // Wenn die Fixe besser geworden ist oder gleich
         {
-          Serial.println("rechts");
-          if (faktor <= 1)
+          if (richtung == 'R')
           {
-            faktor = faktor * 2;
+            Serial.println("rechts");
+            if (faktor <= 1)
+            {
+              faktor = faktor * 2;
+            }
+            hw = hw + ( owinkel / 4 * faktor) ;
+            richtung = 'L';
           }
-          hw = hw + ( owinkel / 4 * faktor) ;
-          richtung = 'L';
-        }
-        else if (richtung == 'L')
-        {
-          Serial.println("links");
-          if (faktor <= 1)
+          else if (richtung == 'L')
           {
-            faktor = faktor * 2;
+            Serial.println("links");
+            if (faktor <= 1)
+            {
+              faktor = faktor * 2;
+            }
+            hw = hw - ( owinkel / 4 * faktor);
+            richtung = 'R';
           }
-          hw = hw - ( owinkel / 4 * faktor);
-          richtung = 'R';
         }
       }
       else                                                        //RSSI gleich
@@ -195,7 +230,7 @@ void trackHorizontal()
           Serial.println("links");
           if (faktor <= 0.1 && loopHori >= 8)                    // wenn der Faktor gut ist und 8 mal Horizontal getrackt wurde.
           {
-            trackVertikal();                    // Horizontal Tracken
+            trackVertikal();                    // Vertikal Tracken
           }
           if (faktor >= 0.1)
           {
@@ -272,25 +307,27 @@ void trackVertikal()
     }
     else
     {
-      if (Vert_richtung == 'U')
+      if ( rssiFix >= rssiFixOld )                        // Wenn die Fixe besser geworden ist oder gleich
       {
-        if (faktor <= 2)
+        if (Vert_richtung == 'U')
         {
-          faktor = faktor * 1.1;
+          if (faktor <= 2)
+          {
+            faktor = faktor * 1.1;
+          }
+          vw = vw - ( owinkel / 3 * faktor);
+          Vert_richtung = 'O';
         }
-        vw = vw - ( owinkel / 3 * faktor);
-        Vert_richtung = 'O';
-      }
-      else
-      {
-        if (faktor <= 2)
+        else
         {
-          faktor = faktor * 1.1;
+          if (faktor <= 2)
+          {
+            faktor = faktor * 1.1;
+          }
+          vw = vw + ( owinkel / 3 * faktor);
+          Vert_richtung = 'U';
         }
-        vw = vw + ( owinkel / 3 * faktor);
-        Vert_richtung = 'U';
       }
-
       DisplayRssi();
       lcd.LCD_write_string(0, 0, "Track Vertikal", MENU_NORMAL );
     }
@@ -316,6 +353,7 @@ void trackVertikal()
 void getRssi()
 {
   rssiTrackOld = rssiTrack;
+  rssiFixOld = rssiFix;
 
   for (int i = 0; i < 10; i++)                        // 10 mal RSSI Werte holen und mittelwert bilden um Rauschen zu verringern
   {
@@ -453,3 +491,5 @@ void FindTX() // mal gucken wo wir den besten emfang haben.
   vw = constrain(vw, minv, maxv);   // nicht über Servo limits bewegen!
   myservo2.write(vw);
 }
+
+
