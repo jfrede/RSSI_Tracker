@@ -1,5 +1,5 @@
 /* RSSI-Tracker
-*  Version 1.0.7 19.09.2015
+*  Version 1.0.8 20.09.2015
 *  Copyright (C) 2013-2015 RSSI-Tracker Jörg Frede
 *  based on code by Michael Heck Eigenbau Diversity und Antennentracker
 *
@@ -34,26 +34,28 @@
 #include <Servo.h>
 
 //SETUP
-const uint16_t wartezeit = 200;  // Default wartezeit in Millisekunden
-const uint8_t schwellwert = 245; // Über diesem wert wird die Antenne nicht bewegt
-const uint8_t maxh = 175;        // Winkel rechts
-const uint8_t minh = 5;          // Winkel links
-const uint8_t maxv = 120;        // Winkel oben
-const uint8_t minv = 60;         // Winkel unten
-const uint8_t rssi1 = 1;         // 1. RSSI Tracker Antenne
-const uint8_t rssi2 = 2;         // 2. RSSI Fixe Antenne
-const uint8_t ServoPortH = 10;   // Port für Hozizontalen Servo
-const uint8_t ServoPortV = 12;   // Port für Vertikalen Servo
-const uint8_t owinkel = 30;      // Öffnungswinkel der Tracking Antenne
-#define SPKR 9                   // Port für Buzzer
+const uint16_t wartezeit = 100;    // Default wartezeit in Millisekunden
+const uint8_t schwellwert = 950;   // Über diesem wert wird die Antenne nicht bewegt
+const uint8_t maxh = 175;          // Winkel rechts
+const uint8_t minh = 5;            // Winkel links
+const uint8_t maxv = 120;          // Winkel oben
+const uint8_t minv = 60;           // Winkel unten
+const uint8_t rssi1 = 1;           // 1. RSSI Tracker Antenne
+const uint8_t rssi2 = 2;           // 2. RSSI Fixe Antenne
+const uint8_t ServoPortH = 10;     // Port für Hozizontalen Servo
+const uint8_t ServoPortV = 12;     // Port für Vertikalen Servo
+const uint8_t owinkel = 30;        // Öffnungswinkel der Tracking Antenne
+const uint16_t mininit = 750;      // mindestwert für Start
+const uint16_t rssischlecht = 512; // Ab hier Alarm und Nofall-Scan
+#define SPKR 9                     // Port für Buzzer
 
 //Variablen Initialisieren
 uint32_t calibrate1 = 0;
 uint32_t calibrate2 = 0;
 uint16_t rssiTrack = 0;
-uint16_t arrayTrack[100];
+uint16_t arrayTrack[10];
 uint16_t rssiFix = 0;
-uint16_t arrayFix[100];
+uint16_t arrayFix[10];
 uint16_t rssiTrackOld = 0;
 uint16_t rssiFixOld = 0;
 uint8_t hw = minh;
@@ -94,7 +96,7 @@ void setup()
     calibrate1 = calibrate1 / 100;
     calibrate2 = calibrate2 / 100;
 
-    if ( ((calibrate1 + calibrate2) / 2 ) < 750 )            // Alarm anzeigen wenn kein Sender gefunden
+    if ( ((calibrate1 + calibrate2) / 2 ) < mininit)            // Alarm anzeigen wenn kein Sender gefunden
     {
       lcd.LCD_init();
       lcd.LCD_clear();
@@ -107,7 +109,7 @@ void setup()
       noTone(SPKR);
     }
   }
-  while (((calibrate1 + calibrate2) / 2) < 300);          // Solange wir noch keine gültige Calibrierung haben noch mal widerholen
+  while (((calibrate1 + calibrate2) / 2) < mininit);          // Solange wir noch keine gültige Calibrierung haben noch mal widerholen
 
   tone(SPKR, 2093, 100);                                  // Ein wenig Musik um zu zeigen das wir erfolgreich Sender gefunden haben
   delay(130);
@@ -142,7 +144,7 @@ void trackHorizontal()
   {
     getRssi();     // Neue werte hohlen
 
-    if (rssiTrack <= 130 || (rssiTrack + 20) <=  rssiFix )              // Wenn das Signal der Tracker Antenne sauschlecht wird Notfall Scan
+    if (rssiTrack <= rssischlecht || (rssiTrack * 1.2) <=  rssiFix )              // Wenn das Signal der Tracker Antenne sauschlecht wird Notfall Scan
     {
       DisplayRssi();
       lcd.LCD_write_string(0, 0, "Notfall Scan! ", MENU_HIGHLIGHT );
@@ -151,16 +153,16 @@ void trackHorizontal()
     }
     else
     {
-      if ( rssiTrack > rssiTrackOld )                              //RSSI Besser geworden min
+      if (rssiTrack > rssiTrackOld + 10)                              //RSSI Besser geworden min
       {
         Serial.print("besser : ");
-        Serial.print(rssiTrackOld - rssiTrackOld);
+        Serial.print(rssiTrack - rssiTrackOld);
         Serial.print(", faktor: ");
         Serial.print(faktor);
         Serial.print("\n");
         if (richtung == 'L')
         {
-          Serial.println("links");
+          Serial.println("Richting = links");
           if (faktor >= 0.1)
           {
             faktor = faktor * 0.5;
@@ -179,10 +181,10 @@ void trackHorizontal()
           richtung = 'R';
         }
       }
-      else if ( rssiTrack < rssiTrackOld )                 //RSSI schlechter geworden
+      else if (rssiTrack < rssiTrackOld - 10)                 //RSSI schlechter geworden
       {
         Serial.print("schlechter : ");
-        Serial.print(rssiTrackOld - rssiTrackOld);
+        Serial.print(rssiTrack - rssiTrackOld);
         Serial.print(", faktor: ");
         Serial.print(faktor);
         Serial.print("\n");
@@ -190,7 +192,7 @@ void trackHorizontal()
         {
           if (richtung == 'R')
           {
-            Serial.println("Richting = rechts");
+            Serial.println("Richting = links");
             if (faktor <= 1)
             {
               faktor = faktor * 2;
@@ -200,7 +202,7 @@ void trackHorizontal()
           }
           else if (richtung == 'L')
           {
-            Serial.println("Richting = links");
+            Serial.println("Richting = rechts");
             if (faktor <= 1)
             {
               faktor = faktor * 2;
@@ -213,7 +215,7 @@ void trackHorizontal()
       else                                                        //RSSI gleich
       {
         Serial.print("Wenig änderung : ");
-        Serial.print(rssiTrackOld - rssiTrackOld);
+        Serial.print(rssiTrack - rssiTrackOld);
         Serial.print(", faktor: ");
         Serial.print(faktor);
         Serial.print("\n");
@@ -234,7 +236,7 @@ void trackHorizontal()
         }
         else if (richtung == 'L')
         {
-          Serial.println("links");
+          Serial.println("Richting = links");
           if (faktor <= 0.1 && loopHori >= 8)                    // wenn der Faktor gut ist und 8 mal Horizontal getrackt wurde.
           {
             trackVertikal();                    // Vertikal Tracken
@@ -279,7 +281,7 @@ void trackVertikal()
   {
     getRssi();    // Neue werte hohlen
 
-    if (rssiTrack <= 50)
+    if (rssiTrack <= rssischlecht)      // Wenn der Wert schlecht ist in die Mitte fahren
     {
       vw = (minv + maxv) / 2;
       myservo2.write(vw);
@@ -291,10 +293,16 @@ void trackVertikal()
       lcd.LCD_write_string(0, 0, "Track Vertikal", MENU_NORMAL );
     }
 
-    if (rssiTrack >= rssiTrackOld)
+    if (rssiTrack > rssiTrackOld)
     {
+      Serial.print("besser : ");
+      Serial.print(rssiTrack - rssiTrackOld);
+      Serial.print(", faktor: ");
+      Serial.print(faktor);
+      Serial.print("\n");
       if (Vert_richtung == 'O')
       {
+        Serial.println("Richting = oben");
         if (faktor >= 0.1)
         {
           faktor = faktor * 0.9;
@@ -304,6 +312,7 @@ void trackVertikal()
       }
       else
       {
+        Serial.println("Richting = unten");
         if (faktor >= 0.1)
         {
           faktor = faktor * 0.9;
@@ -353,13 +362,14 @@ void trackVertikal()
 
     loopVert++;
   }
-  while (loopVert > 3 && rssiTrack <= schwellwert);
+  while (loopVert > 4 && rssiTrack <= schwellwert);
   return;
 }
 
 
 void sortTrack() {
-  uint16_t out, in, swapper;
+  uint16_t swapper;
+  uint8_t out, in;
   for (out = 0 ; out < 10; out++) { // outer loop
     for (in = out; in < (10 - 1); in++)  { // inner loop
       if ( arrayTrack[in] > arrayTrack[in + 1] ) { // out of order?
@@ -373,7 +383,8 @@ void sortTrack() {
 }
 
 void sortFix() {
-  uint16_t out, in, swapper;
+  uint16_t swapper;
+  uint8_t out, in;
   for (out = 0 ; out < 10; out++) { // outer loop
     for (in = out; in < (10 - 1); in++)  { // inner loop
       if ( arrayFix[in] > arrayFix[in + 1] ) { // out of order?
@@ -391,7 +402,7 @@ void getRssi()
   rssiTrackOld = rssiTrack;
   rssiFixOld = rssiFix;
 
-  for (int i = 0; i < 10; i++)                            // 10 mal RSSI Werte holen und Median ausrechnen bilden um Rauschen zu verringern
+  for (uint8_t i = 0; i < 10; i++)                     // 10 mal RSSI Werte holen und Median ausrechnen um Rauschen zu verringern
   {
     arrayTrack[i] = analogRead(rssi1);
     arrayFix[i] = analogRead(rssi2);
@@ -400,10 +411,10 @@ void getRssi()
   sortFix();
   sortTrack();
 
-  rssiTrack = arrayTrack[5];                             //  Median Werte merken.
+  rssiTrack = arrayTrack[5];                           //  Median Werte merken.
   rssiFix = arrayFix[5];
 
-  if ( rssiTrack > calibrate1 + 5 )                       // wenn der aktuelle RSSI wert 5 über der calibrierung ist die Calibrierung um 1 erhöhen.
+  if ( rssiTrack > calibrate1 + 5 )                    // wenn der aktuelle RSSI wert 5 über der calibrierung ist die Calibrierung um 1 erhöhen.
   {
     calibrate1++;
   }
@@ -418,10 +429,10 @@ void getRssi()
   Serial.print(", rssiFixRaw: ");
   Serial.print(rssiFix);
 
-  rssiTrack = map(rssiTrack, 0, calibrate1, 0, 255);  // Neue zwischen 0 und 255 begrenzen
-  rssiFix = map(rssiFix, 0, calibrate2, 0, 255);
-  rssiTrack = constrain(rssiTrack, 0, 255);
-  rssiFix = constrain(rssiFix, 0, 255);
+  rssiTrack = map(rssiTrack, 0, calibrate1, 0, 1024);  // Neue zwischen 0 und 1024 begrenzen
+  rssiFix = map(rssiFix, 0, calibrate2, 0, 1024);
+  rssiTrack = constrain(rssiTrack, 0, 1024);
+  rssiFix = constrain(rssiFix, 0, 1024);
 
   //Info to searial port
   Serial.print(", rssiTrackNormal: ");
@@ -431,7 +442,7 @@ void getRssi()
   Serial.print("\n");
 
 
-  if (((rssiTrack + rssiFix) / 2) <= 130)             // Alarm machen wenn das Signal schlecht wird
+  if (((rssiTrack + rssiFix) / 2) <= rssischlecht)             // Alarm machen wenn das Signal schlecht wird
   {
     tone(SPKR, 2960);
   }
