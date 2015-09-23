@@ -42,6 +42,8 @@ const uint8_t maxv = 120;          // Winkel oben
 const uint8_t minv = 60;           // Winkel unten
 const uint8_t rssi1 = 1;           // 1. RSSI Tracker Antenne
 const uint8_t rssi2 = 2;           // 2. RSSI Fixe Antenne
+const uint8_t Poti = 3;            // Poti für Manuelle Steuerung
+const uint8_t Taster = 4;          // Mode Switch
 const uint8_t ServoPortH = 10;     // Port für Hozizontalen Servo
 const uint8_t ServoPortV = 12;     // Port für Vertikalen Servo
 const uint8_t owinkel = 30;        // Öffnungswinkel der Tracking Antenne
@@ -58,11 +60,14 @@ uint16_t rssiFix = 0;
 uint16_t arrayFix[10];
 uint16_t rssiTrackOld = 0;
 uint16_t rssiFixOld = 0;
+uint16_t PotiWert = 0;
+uint16_t TasterWert = 0;
 uint8_t hw = minh;
 uint8_t vw = minv;
 char richtung = 'L';
 char Vert_richtung;
 char buffer[10];
+char Mode = 'A';
 uint8_t loopVert = 0;
 uint8_t loopHori = 0;
 float faktor = 1;
@@ -124,28 +129,21 @@ void setup()
 
 void loop()
 {
-  //Serial.println("loop");
   getRssi();               // Neue werte hohlen
 
-  DisplayRssi();
-  lcd.LCD_write_string(0, 0, "Kein Tracking ", MENU_NORMAL );
-
-  if (rssiTrack <= schwellwert)
+  if ( Mode == 'M' )
   {
-        trackHorizontal();
-  }
+    hw = map(PotiWert, 0, 1024, 5, 175);  // Poti Wert auf Servo Mappen
+    myservo1.write(hw);
+    vw = (minv + maxv) / 2;
+    myservo2.write(vw);
+    DisplayRssi();
+    lcd.LCD_write_string(0, 0, "Manuell Modus ", MENU_NORMAL );
+    return;
+   }
 
-  delay(wartezeit * faktor);
-
-}
-
-void trackHorizontal()
-{
-  //Serial.println("trackHorizontal");
-  do
+  if (rssiTrack <= schwellwert && Mode == 'A')
   {
-    getRssi();     // Neue werte hohlen
-
     if (rssiTrack <= rssischlecht || (rssiTrack * 1.2) <=  rssiFix )              // Wenn das Signal der Tracker Antenne sauschlecht wird Notfall Scan
     {
       DisplayRssi();
@@ -154,125 +152,131 @@ void trackHorizontal()
       FindTX();
       faktor = 0.75;
     }
-    else
-    {
-      if (rssiTrack > rssiTrackOld + 10)                              //RSSI Besser geworden min
-      {
-        Serial.print("besser : ");
-        Serial.print(rssiTrack - rssiTrackOld);
-        Serial.print(", faktor: ");
-        Serial.print(faktor);
-        Serial.print("\n");
-        if (richtung == 'L')
-        {
-          Serial.println("Richting = links");
-          if (faktor >= 0.1)
-          {
-            faktor = faktor * 0.5;
-          }
-          hw = hw + ( owinkel / 4 * faktor );
-          richtung = 'L';
-        }
-        else if (richtung == 'R')
-        {
-          Serial.println("Richting = rechts");
-          if (faktor >= 0.1)
-          {
-            faktor = faktor * 0.5;
-          }
-          hw = hw - ( owinkel / 4 * faktor );
-          richtung = 'R';
-        }
-      }
-      else if (rssiTrack < rssiTrackOld - 5)                 //RSSI schlechter geworden
-      {
-        Serial.print("schlechter : ");
-        Serial.print(rssiTrack - rssiTrackOld);
-        Serial.print(", faktor: ");
-        Serial.print(faktor);
-        Serial.print("\n");
-        if ( rssiFix >= rssiFixOld )                        // Wenn die Fixe besser geworden ist oder gleich
-        {
-          if (richtung == 'R')
-          {
-            Serial.println("Richting = links");
-            if (faktor <= 1)
-            {
-              faktor = faktor * 2;
-            }
-            hw = hw + ( owinkel / 4 * faktor) ;
-            richtung = 'L';
-          }
-          else if (richtung == 'L')
-          {
-            Serial.println("Richting = rechts");
-            if (faktor <= 1)
-            {
-              faktor = faktor * 2;
-            }
-            hw = hw - ( owinkel / 4 * faktor);
-            richtung = 'R';
-          }
-        }
-      }
-      else                                                        //RSSI gleich
-      {
-        Serial.print("Wenig änderung : ");
-        Serial.print(rssiTrack - rssiTrackOld);
-        Serial.print(", faktor: ");
-        Serial.print(faktor);
-        Serial.print("\n");
-
-        if (richtung == 'R')
-        {
-          Serial.println("Richtung = rechts");
-          if (faktor <= 0.1 && loopHori >= 6)                    // wenn der Faktor gut ist und 6 mal Horizontal getrackt wurde.
-          {
-            trackVertikal();                    // Vertikal Tracken
-          }
-          if (faktor >= 0.1)
-          {
-            faktor = faktor * 0.5;
-          }
-          hw = hw - 1;
-          richtung = 'R';
-        }
-        else if (richtung == 'L')
-        {
-          Serial.println("Richting = links");
-          if (faktor <= 0.1 && loopHori >= 6)                    // wenn der Faktor gut ist und 6 mal Horizontal getrackt wurde.
-          {
-            trackVertikal();                    // Vertikal Tracken
-          }
-          if (faktor >= 0.1)
-          {
-            faktor = faktor * 0.5;
-          }
-          hw = hw + 1;
-          richtung = 'L';
-        }
-      }
-
-      DisplayRssi();
-      lcd.LCD_write_string(0, 0, "Track Horizont", MENU_NORMAL );
-    }
-
-    hw = constrain(hw, minh, maxh);   // nicht über Servo limits bewegen!
-    myservo1.write(hw);
-
-    if (hw <= minh || hw >= maxh)          // Wenn der Servo an seinen Maxinalwert bewegt werden soll ein mal neu suchen.
-    {
-      lcd.LCD_clear();
-      lcd.LCD_write_string(0, 2, "Reset H", MENU_NORMAL );
-      FindTX();
-      faktor = 1;
-      return;
-    }
-    loopHori++;
-    delay(wartezeit * faktor);
+    trackHorizontal();
+  }
+  else
+  {
+    DisplayRssi();
+    lcd.LCD_write_string(0, 0, "Kein Tracking ", MENU_NORMAL );
   }
 
-  while (rssiTrack <= schwellwert);
+  delay(wartezeit * faktor);
+}
+
+void trackHorizontal()
+{
+  if (rssiTrack > rssiTrackOld + 10)                              //RSSI Besser geworden min
+  {
+    Serial.print("besser : ");
+    Serial.print(rssiTrack - rssiTrackOld);
+    Serial.print(", faktor: ");
+    Serial.print(faktor);
+    Serial.print("\n");
+    if (richtung == 'L')
+    {
+      Serial.println("Richting = links");
+      if (faktor >= 0.1)
+      {
+        faktor = faktor * 0.5;
+      }
+      hw = hw + ( owinkel / 4 * faktor );
+      richtung = 'L';
+    }
+    else if (richtung == 'R')
+    {
+      Serial.println("Richting = rechts");
+      if (faktor >= 0.1)
+      {
+        faktor = faktor * 0.5;
+      }
+      hw = hw - ( owinkel / 4 * faktor );
+      richtung = 'R';
+    }
+  }
+  else if (rssiTrack < rssiTrackOld - 5)                 //RSSI schlechter geworden
+  {
+    Serial.print("schlechter : ");
+    Serial.print(rssiTrack - rssiTrackOld);
+    Serial.print(", faktor: ");
+    Serial.print(faktor);
+    Serial.print("\n");
+    if ( rssiFix >= rssiFixOld )                        // Wenn die Fixe besser geworden ist oder gleich
+    {
+      if (richtung == 'R')
+      {
+        Serial.println("Richting = links");
+        if (faktor <= 1)
+        {
+          faktor = faktor * 2;
+        }
+        hw = hw + ( owinkel / 4 * faktor) ;
+        richtung = 'L';
+      }
+      else if (richtung == 'L')
+      {
+        Serial.println("Richting = rechts");
+        if (faktor <= 1)
+        {
+          faktor = faktor * 2;
+        }
+        hw = hw - ( owinkel / 4 * faktor);
+        richtung = 'R';
+      }
+    }
+  }
+  else                                                        //RSSI gleich
+  {
+    Serial.print("Wenig änderung : ");
+    Serial.print(rssiTrack - rssiTrackOld);
+    Serial.print(", faktor: ");
+    Serial.print(faktor);
+    Serial.print("\n");
+
+    if (richtung == 'R')
+    {
+      Serial.println("Richtung = rechts");
+      if (faktor <= 0.1 && loopHori >= 6)                    // wenn der Faktor gut ist und 6 mal Horizontal getrackt wurde.
+      {
+        trackVertikal();                    // Vertikal Tracken
+      }
+      if (faktor >= 0.1)
+      {
+        faktor = faktor * 0.5;
+      }
+      hw = hw - 1;
+      richtung = 'R';
+    }
+    else if (richtung == 'L')
+    {
+      Serial.println("Richting = links");
+      if (faktor <= 0.1 && loopHori >= 6)                    // wenn der Faktor gut ist und 6 mal Horizontal getrackt wurde.
+      {
+        trackVertikal();                    // Vertikal Tracken
+      }
+      if (faktor >= 0.1)
+      {
+        faktor = faktor * 0.5;
+      }
+      hw = hw + 1;
+      richtung = 'L';
+    }
+  }
+
+  DisplayRssi();
+  lcd.LCD_write_string(0, 0, "Track Horizont", MENU_NORMAL );
+
+  hw = constrain(hw, minh, maxh);   // nicht über Servo limits bewegen!
+  myservo1.write(hw);
+
+  if (hw <= minh || hw >= maxh)          // Wenn der Servo an seinen Maxinalwert bewegt werden soll ein mal neu suchen.
+  {
+    lcd.LCD_clear();
+    lcd.LCD_write_string(0, 2, "Reset H", MENU_NORMAL );
+    FindTX();
+    faktor = 1;
+    return;
+  }
+  loopHori++;
   return;
 }
 
@@ -405,6 +409,36 @@ void getRssi()
   rssiTrackOld = rssiTrack;
   rssiFixOld = rssiFix;
 
+  PotiWert = analogRead(Poti);
+  TasterWert = analogRead(Taster);
+
+  Serial.print("Taster: ");
+  Serial.print(TasterWert);
+  
+  Serial.print(", Poti: ");
+  Serial.print(PotiWert);
+
+  if ( TasterWert <= 100 )
+  {
+    if ( Mode == 'A' )
+    {
+      Mode = 'M';
+    }
+    else 
+    {
+      Mode = 'A';
+    }
+    do 
+    {
+      TasterWert = analogRead(Taster);
+      delay (10);
+    }
+    while (TasterWert <= 100);
+    //rssiTrack=analogRead(rssi1);                   // Speedup test
+    //rssiFix=analogRead(rssi2);
+    //return;
+    }
+
   for (uint8_t i = 0; i < 10; i++)                     // 10 mal RSSI Werte holen und Median ausrechnen um Rauschen zu verringern
   {
     arrayTrack[i] = analogRead(rssi1);
@@ -427,7 +461,7 @@ void getRssi()
   }
 
   //Info to searial port
-  Serial.print("rssiTrackRaw: ");
+  Serial.print(", rssiTrackRaw: ");
   Serial.print(rssiTrack);
   Serial.print(", rssiFixRaw: ");
   Serial.print(rssiFix);
@@ -444,8 +478,7 @@ void getRssi()
   Serial.print(rssiFix);
   Serial.print("\n");
 
-
-  if (((rssiTrack + rssiFix) / 2) <= rssischlecht)             // Alarm machen wenn das Signal schlecht wird
+  if ((((rssiTrack + rssiFix) / 2) <= rssischlecht) && Mode == 'A')             // Alarm machen wenn das Signal schlecht wird
   {
     tone(SPKR, 2960);
   }
