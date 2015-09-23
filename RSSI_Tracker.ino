@@ -35,7 +35,7 @@
 
 //SETUP
 const uint16_t wartezeit = 100;    // Default wartezeit in Millisekunden
-const uint8_t schwellwert = 950;   // Über diesem wert wird die Antenne nicht bewegt
+const uint16_t schwellwert = 950;   // Über diesem wert wird die Antenne nicht bewegt
 const uint8_t maxh = 175;          // Winkel rechts
 const uint8_t minh = 5;            // Winkel links
 const uint8_t maxv = 120;          // Winkel oben
@@ -46,7 +46,7 @@ const uint8_t ServoPortH = 10;     // Port für Hozizontalen Servo
 const uint8_t ServoPortV = 12;     // Port für Vertikalen Servo
 const uint8_t owinkel = 30;        // Öffnungswinkel der Tracking Antenne
 const uint16_t mininit = 750;      // mindestwert für Start
-const uint16_t rssischlecht = 512; // Ab hier Alarm und Nofall-Scan
+const uint16_t rssischlecht = 530; // Ab hier Alarm und Nofall-Scan
 #define SPKR 9                     // Port für Buzzer
 
 //Variablen Initialisieren
@@ -124,6 +124,7 @@ void setup()
 
 void loop()
 {
+  //Serial.println("loop");
   getRssi();               // Neue werte hohlen
 
   DisplayRssi();
@@ -131,7 +132,7 @@ void loop()
 
   if (rssiTrack <= schwellwert)
   {
-    trackHorizontal();
+        trackHorizontal();
   }
 
   delay(wartezeit * faktor);
@@ -140,6 +141,7 @@ void loop()
 
 void trackHorizontal()
 {
+  //Serial.println("trackHorizontal");
   do
   {
     getRssi();     // Neue werte hohlen
@@ -147,6 +149,7 @@ void trackHorizontal()
     if (rssiTrack <= rssischlecht || (rssiTrack * 1.2) <=  rssiFix )              // Wenn das Signal der Tracker Antenne sauschlecht wird Notfall Scan
     {
       DisplayRssi();
+      Serial.println("Notfall Scan!");
       lcd.LCD_write_string(0, 0, "Notfall Scan! ", MENU_HIGHLIGHT );
       FindTX();
       faktor = 0.75;
@@ -181,7 +184,7 @@ void trackHorizontal()
           richtung = 'R';
         }
       }
-      else if (rssiTrack < rssiTrackOld - 10)                 //RSSI schlechter geworden
+      else if (rssiTrack < rssiTrackOld - 5)                 //RSSI schlechter geworden
       {
         Serial.print("schlechter : ");
         Serial.print(rssiTrack - rssiTrackOld);
@@ -223,7 +226,7 @@ void trackHorizontal()
         if (richtung == 'R')
         {
           Serial.println("Richtung = rechts");
-          if (faktor <= 0.1 && loopHori >= 8)                    // wenn der Faktor gut ist und 8 mal Horizontal getrackt wurde.
+          if (faktor <= 0.1 && loopHori >= 6)                    // wenn der Faktor gut ist und 6 mal Horizontal getrackt wurde.
           {
             trackVertikal();                    // Vertikal Tracken
           }
@@ -237,7 +240,7 @@ void trackHorizontal()
         else if (richtung == 'L')
         {
           Serial.println("Richting = links");
-          if (faktor <= 0.1 && loopHori >= 8)                    // wenn der Faktor gut ist und 8 mal Horizontal getrackt wurde.
+          if (faktor <= 0.1 && loopHori >= 6)                    // wenn der Faktor gut ist und 6 mal Horizontal getrackt wurde.
           {
             trackVertikal();                    // Vertikal Tracken
           }
